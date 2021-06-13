@@ -22,10 +22,10 @@ namespace Camera_Bot___Server
 
 
             //Establishing local endpoint.
-            //IPHostEntry hostEntry = Dns.GetHostEntry(Dns.GetHostName());
-            //IPAddress IP_address = hostEntry.AddressList[0];
+            IPHostEntry hostEntry = Dns.GetHostEntry(Dns.GetHostName());
+            IPAddress IP_address = hostEntry.AddressList[0];
 
-            IPAddress IP_address = new IPAddress(new byte[] { 10, 0, 0, 68 });
+            //IPAddress IP_address = new IPAddress(new byte[] { 10, 0, 0, 68 });
             IPEndPoint local_endPoint = new IPEndPoint(IP_address, 11000);
 
             Socket listener = new Socket(IP_address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);

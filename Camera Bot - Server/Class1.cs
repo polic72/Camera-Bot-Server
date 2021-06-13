@@ -162,9 +162,9 @@ public class AsynchronousSocketListener
         }
     }
 
-    public static int Main(String[] args)
-    {
-        StartListening();
-        return 0;
-    }
+    //public static int Main(String[] args)
+    //{
+    //    StartListening();
+    //    return 0;
+    //}
 }
