@@ -11,7 +11,7 @@ namespace Camera_Bot___Server
 {
     class Program
     {
-        static void Main(string[] args)
+        static void eMain(string[] args)
         {
             //https://docs.microsoft.com/en-us/dotnet/framework/network-programming/synchronous-server-socket-example
 
