@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading;
 
 // State object for reading client data asynchronously  
-public class StateObject
+public class StateObject_1
 {
     // Size of receive buffer.  
     public const int BufferSize = 1024;
@@ -87,9 +87,9 @@ public class AsynchronousSocketListener
         Socket handler = listener.EndAccept(ar);
 
         // Create the state object.  
-        StateObject state = new StateObject();
+        StateObject_1 state = new StateObject_1();
         state.workSocket = handler;
-        handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0,
+        handler.BeginReceive(state.buffer, 0, StateObject_1.BufferSize, 0,
             new AsyncCallback(ReadCallback), state);
     }
 
@@ -99,7 +99,7 @@ public class AsynchronousSocketListener
 
         // Retrieve the state object and the handler socket  
         // from the asynchronous state object.  
-        StateObject state = (StateObject)ar.AsyncState;
+        StateObject_1 state = (StateObject_1)ar.AsyncState;
         Socket handler = state.workSocket;
 
         // Read data from the client socket.
@@ -126,7 +126,7 @@ public class AsynchronousSocketListener
             else
             {
                 // Not all data received. Get more.  
-                handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0,
+                handler.BeginReceive(state.buffer, 0, StateObject_1.BufferSize, 0,
                 new AsyncCallback(ReadCallback), state);
             }
         }
