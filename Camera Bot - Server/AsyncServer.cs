@@ -6,6 +6,9 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 
+using CBT_P;
+
+
 namespace Camera_Bot___Server
 {
     /// <summary>
@@ -183,7 +186,7 @@ namespace Camera_Bot___Server
                 int pos = command.IndexOf('|');
                 if (pos > -1)
                 {
-                    //CBT-P
+                    //Run through CBT-P check and do shit accordingly.
                 }
                 else
                 {
