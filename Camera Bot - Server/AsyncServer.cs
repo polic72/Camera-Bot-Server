@@ -50,11 +50,28 @@ namespace Camera_Bot___Server
         #endregion Properties
 
 
+        #region OnAccept Event
+
+        ///// <summary>
+        ///// What the server will do when it accepts a connection.
+        ///// </summary>
+        ///// <param name="stateObject">The state object for this connection.</param>
+        //public delegate void OnAcceptHandler(object sender, );
+
+        ///// <summary>
+        ///// 
+        ///// </summary>
+        //public event OnAcceptHandler OnAccept;
+
+        #endregion OnAccept Event
+
+
         protected IPEndPoint endPoint;
 
 
         private bool continue_running = false;
         protected Thread acceptance_thread;
+        protected ManualResetEvent waiter = new ManualResetEvent(false);
 
         protected Socket listener;
 
@@ -103,12 +120,85 @@ namespace Camera_Bot___Server
         }
 
 
+        /// <summary>
+        /// The loop that will accept connections until the server is stopped.
+        /// </summary>
         private void AcceptLoop()
         {
             while (continue_running)
             {
+                waiter.Reset();
 
+                listener.BeginAccept(new AsyncCallback(AcceptCallback), listener);
+
+                waiter.WaitOne();
+            }
+        }
+
+
+        /// <summary>
+        /// The method run whenever a connection is accepted.
+        /// </summary>
+        /// <param name="asyncResult">The result of accepting asynchronously.</param>
+        private void AcceptCallback(IAsyncResult asyncResult)
+        {
+            waiter.Set();
+
+            Socket safe_listener = (Socket)asyncResult.AsyncState;
+            Socket handler = safe_listener.EndAccept(asyncResult);
+
+
+            StateObject stateObject = new StateObject(handler);
+
+            while (stateObject.KeepAlive)
+            {
+                stateObject.ReceiveResetEvent.Reset();
+
+                handler.BeginReceive(stateObject.Buffer, 0, stateObject.Buffer.Length, SocketFlags.None, new AsyncCallback(ReceiveCallback), stateObject);
+
+                stateObject.ReceiveResetEvent.WaitOne();
+            }
+        }
+
+
+        /// <summary>
+        /// The method run whenever the server receives data.
+        /// </summary>
+        /// <param name="asyncResult">The result of receiving asynchronously.</param>
+        private void ReceiveCallback(IAsyncResult asyncResult)
+        {
+            string command;
+
+            StateObject stateObject = (StateObject)asyncResult.AsyncState;
+
+
+            int count = stateObject.Handler.EndReceive(asyncResult);
+
+            if (count > 0)
+            {
+                stateObject.StoredText.Append(Encoding.ASCII.GetString(stateObject.Buffer));
+
+                command = stateObject.StoredText.ToString();
+
+                int pos = command.IndexOf('|');
+                if (pos > -1)
+                {
+                    //CBT-P
+                }
+                else
+                {
+                    stateObject.ReceiveResetEvent.Set();
+                }
             }
         }
     }
+
+
+    ///// <summary>
+    ///// The event that will happen
+    ///// </summary>
+    //public class OnAcceptEventArgs
+    //{
+
+    //}
 }
