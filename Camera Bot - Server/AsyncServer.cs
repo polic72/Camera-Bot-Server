@@ -78,8 +78,10 @@ namespace Camera_Bot___Server
         protected ManualResetEvent acceptance_waiter = new ManualResetEvent(false);
         protected Socket listener;
 
+        protected object Receive_Lock = new object();
+
         protected Thread command_thread;
-        protected BlockingCollection<string> command_queue; //Already has a ConcurrentQueue under the hood.
+        protected BlockingCollection<Command_Object> command_queue; //Already has a ConcurrentQueue under the hood.
 
 
         /// <summary>
@@ -112,6 +114,9 @@ namespace Camera_Bot___Server
         {
             if (!IsRunning)
             {
+                continue_running = true;
+
+
                 //Acceptance thread:
                 ThreadStart acceptance_threadStart = new ThreadStart(AcceptLoop);
 
@@ -126,13 +131,10 @@ namespace Camera_Bot___Server
                 //Command thread:
                 ThreadStart command_threadStart = new ThreadStart(CommandLoop);
 
-                command_queue = new BlockingCollection<string>();
+                command_queue = new BlockingCollection<Command_Object>();
 
                 command_thread = new Thread(command_threadStart);
                 command_thread.Start();
-
-
-                continue_running = true;
             }
         }
 
@@ -165,6 +167,23 @@ namespace Camera_Bot___Server
             Socket handler = safe_listener.EndAccept(asyncResult);
 
 
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.Write("Connected");
+
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.Write(" to [");
+
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write(((IPEndPoint)handler.RemoteEndPoint).Address.ToString());
+
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine("].\r\n");
+
+
+            System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
+            Console.WriteLine(process.Threads.Count.ToString() + "\r\n\r\n");
+
+
             StateObject stateObject = new StateObject(handler);
 
             while (stateObject.KeepAlive)
@@ -193,21 +212,23 @@ namespace Camera_Bot___Server
 
             if (count > 0)
             {
-                stateObject.StoredText.Append(Encoding.ASCII.GetString(stateObject.Buffer));
+                stateObject.StoredText.Append(Encoding.ASCII.GetString(stateObject.Buffer, 0, count));
 
-                whole = stateObject.StoredText.ToString();
+                whole = stateObject.StoredText.ToString(0, stateObject.StoredText.Length);
 
                 int pos = whole.IndexOf('|');
                 if (pos > -1)
                 {
                     string command = whole.Substring(0, pos);
 
-                    command_queue.Add(command);
-
                     stateObject.StoredText.Clear();
-                    stateObject.StoredText.Append(whole.Substring(pos + 1));
+                    stateObject.StoredText.Append((whole != "") ? whole.Substring(pos + 1) : "");
 
-                    stateObject.ReceiveResetEvent.Set();
+
+                    Command_Object command_Object = new Command_Object(command, stateObject);
+                    command_queue.Add(command_Object);
+
+                    //stateObject.ReceiveResetEvent.Set();
                 }
                 else
                 {
@@ -224,10 +245,125 @@ namespace Camera_Bot___Server
         {
             while (continue_running)
             {
-                string command = command_queue.Take();
+                Command_Object command_Object = command_queue.Take();
 
-                Console.WriteLine("Command: " + command);
+                try
+                {
+                    switch ((Command)Enum.Parse(typeof(Command), command_Object.Command))
+                    {
+                        #region Movement Start
+
+                        case Command.Up:
+                            try
+                            {
+                                SendResponse(command_Object.StateObject.Handler, Response.Ok);
+
+
+                                //
+                            }
+                            catch (SocketException)
+                            {
+                                Disconnect(command_Object.StateObject);
+                            }
+                            break;
+
+                        #endregion Movement Start
+
+
+                        #region Movement End
+
+                        case Command.StopUp:
+                            try
+                            {
+                                SendResponse(command_Object.StateObject.Handler, Response.Ok);
+
+
+                                //
+                            }
+                            catch (SocketException)
+                            {
+                                Disconnect(command_Object.StateObject);
+                            }
+                            break;
+
+                        #endregion Movement End
+
+
+                        #region Other
+
+                        case Command.Disconnect:
+                            try
+                            {
+                                SendResponse(command_Object.StateObject.Handler, Response.Goodbye);
+                            }
+                            catch (SocketException)
+                            {
+                                //Do nothing, they're already gone...
+                            }
+
+                            Disconnect(command_Object.StateObject);
+                            break;
+
+
+                        default:
+                            try
+                            {
+                                SendResponse(command_Object.StateObject.Handler, Response.Bad); //Currently unsupported (yet totally legal) command.
+                            }
+                            catch (SocketException)
+                            {
+                                Disconnect(command_Object.StateObject);
+                            }
+                            break;
+
+                        #endregion Other
+                    }
+                }
+                catch (ArgumentException)
+                {
+                    try
+                    {
+                        SendResponse(command_Object.StateObject.Handler, Response.Bad);
+                    }
+                    catch (SocketException)
+                    {
+                        Disconnect(command_Object.StateObject);
+                    }
+                }
+                finally
+                {
+                    command_Object.StateObject.ReceiveResetEvent.Set();
+                }
+
+
+                Console.WriteLine(command_Object.Command + "\r\n");
             }
+        }
+
+
+        /// <summary>
+        /// Sends a response to the given client.
+        /// </summary>
+        /// <param name="client_handler">The socket that communicates with a client.</param>
+        /// <param name="response">The response to send to the client.</param>
+        private void SendResponse(Socket client_handler, Response response)
+        {
+            client_handler.Send(Encoding.ASCII.GetBytes(response.ToString() + "|"));
+        }
+
+
+        /// <summary>
+        /// Gracefully disconnects the server from the client state object.
+        /// </summary>
+        /// <param name="stateObject">The client's state object.</param>
+        private void Disconnect(StateObject stateObject)
+        {
+            stateObject.Handler.Shutdown(SocketShutdown.Both);
+            stateObject.Handler.Close();
+
+            stateObject.KeepAlive = false;
+
+
         }
     }
 

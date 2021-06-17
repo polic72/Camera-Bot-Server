@@ -13,7 +13,7 @@ namespace Camera_Bot___Server
     {
         static void Main(string[] args)
         {
-            AsyncServer server = new AsyncServer(new IPAddress(new byte[] { 10, 0, 0, 68 }), 11000);
+            AsyncServer server = new AsyncServer(new IPAddress(new byte[] { 10, 120, 140, 75 }), 11000);
 
             server.StartServer(5);
 
