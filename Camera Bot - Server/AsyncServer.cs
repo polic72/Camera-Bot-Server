@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -73,10 +73,13 @@ namespace Camera_Bot___Server
 
 
         private bool continue_running = false;
-        protected Thread acceptance_thread;
-        protected ManualResetEvent waiter = new ManualResetEvent(false);
 
+        protected Thread acceptance_thread;
+        protected ManualResetEvent acceptance_waiter = new ManualResetEvent(false);
         protected Socket listener;
+
+        protected Thread command_thread;
+        protected BlockingCollection<string> command_queue; //Already has a ConcurrentQueue under the hood.
 
 
         /// <summary>
@@ -109,14 +112,25 @@ namespace Camera_Bot___Server
         {
             if (!IsRunning)
             {
-                ThreadStart threadStart = new ThreadStart(AcceptLoop);
+                //Acceptance thread:
+                ThreadStart acceptance_threadStart = new ThreadStart(AcceptLoop);
 
                 listener = new Socket(IPAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
                 listener.Bind(endPoint);
                 listener.Listen(max_connections);
 
-                acceptance_thread = new Thread(threadStart);
+                acceptance_thread = new Thread(acceptance_threadStart);
                 acceptance_thread.Start();
+
+
+                //Command thread:
+                ThreadStart command_threadStart = new ThreadStart(CommandLoop);
+
+                command_queue = new BlockingCollection<string>();
+
+                command_thread = new Thread(command_threadStart);
+                command_thread.Start();
+
 
                 continue_running = true;
             }
@@ -130,11 +144,11 @@ namespace Camera_Bot___Server
         {
             while (continue_running)
             {
-                waiter.Reset();
+                acceptance_waiter.Reset();
 
                 listener.BeginAccept(new AsyncCallback(AcceptCallback), listener);
 
-                waiter.WaitOne();
+                acceptance_waiter.WaitOne();
             }
         }
 
@@ -145,7 +159,7 @@ namespace Camera_Bot___Server
         /// <param name="asyncResult">The result of accepting asynchronously.</param>
         private void AcceptCallback(IAsyncResult asyncResult)
         {
-            waiter.Set();
+            acceptance_waiter.Set();
 
             Socket safe_listener = (Socket)asyncResult.AsyncState;
             Socket handler = safe_listener.EndAccept(asyncResult);
@@ -170,7 +184,7 @@ namespace Camera_Bot___Server
         /// <param name="asyncResult">The result of receiving asynchronously.</param>
         private void ReceiveCallback(IAsyncResult asyncResult)
         {
-            string command;
+            string whole;
 
             StateObject stateObject = (StateObject)asyncResult.AsyncState;
 
@@ -181,17 +195,38 @@ namespace Camera_Bot___Server
             {
                 stateObject.StoredText.Append(Encoding.ASCII.GetString(stateObject.Buffer));
 
-                command = stateObject.StoredText.ToString();
+                whole = stateObject.StoredText.ToString();
 
-                int pos = command.IndexOf('|');
+                int pos = whole.IndexOf('|');
                 if (pos > -1)
                 {
-                    //Run through CBT-P check and do shit accordingly.
+                    string command = whole.Substring(0, pos);
+
+                    command_queue.Add(command);
+
+                    stateObject.StoredText.Clear();
+                    stateObject.StoredText.Append(whole.Substring(pos + 1));
+
+                    stateObject.ReceiveResetEvent.Set();
                 }
                 else
                 {
                     stateObject.ReceiveResetEvent.Set();
                 }
+            }
+        }
+
+
+        /// <summary>
+        /// The loops that checks the queue for commands and performs them ASAP.
+        /// </summary>
+        private void CommandLoop()
+        {
+            while (continue_running)
+            {
+                string command = command_queue.Take();
+
+                Console.WriteLine("Command: " + command);
             }
         }
     }
