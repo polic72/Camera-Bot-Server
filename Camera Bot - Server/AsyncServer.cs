@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -76,12 +77,14 @@ namespace Camera_Bot___Server
 
         protected Thread acceptance_thread;
         protected ManualResetEvent acceptance_waiter = new ManualResetEvent(false);
+        protected LinkedList<StateObject> all_stateObjects;
         protected Socket listener;
 
         protected object Receive_Lock = new object();
 
         protected Thread command_thread;
         protected BlockingCollection<Command_Object> command_queue; //Already has a ConcurrentQueue under the hood.
+        protected SerialCommunicator serial_communicator;
 
 
         /// <summary>
@@ -103,6 +106,14 @@ namespace Camera_Bot___Server
             Port = port;
 
             endPoint = new IPEndPoint(IP_address, port);
+
+
+            all_stateObjects = new LinkedList<StateObject>();
+
+
+            //TODO remember to add a config setting for the Serial Port Name.
+
+            serial_communicator = new SerialCommunicator("COM3");
         }
 
 
@@ -120,8 +131,11 @@ namespace Camera_Bot___Server
                 //Acceptance thread:
                 ThreadStart acceptance_threadStart = new ThreadStart(AcceptLoop);
 
-                listener = new Socket(IPAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                listener.Bind(endPoint);
+                if (!listener?.IsBound ?? true)
+                {
+                    listener = new Socket(IPAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                    listener.Bind(endPoint);
+                }
                 listener.Listen(max_connections);
 
                 acceptance_thread = new Thread(acceptance_threadStart);
@@ -180,11 +194,12 @@ namespace Camera_Bot___Server
             Console.WriteLine("].\r\n");
 
 
-            System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
-            Console.WriteLine(process.Threads.Count.ToString() + "\r\n\r\n");
+            //System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess();
+            //Console.WriteLine(process.Threads.Count.ToString() + "\r\n\r\n");
 
 
             StateObject stateObject = new StateObject(handler);
+            all_stateObjects.AddLast(stateObject);
 
             while (stateObject.KeepAlive)
             {
@@ -208,7 +223,15 @@ namespace Camera_Bot___Server
             StateObject stateObject = (StateObject)asyncResult.AsyncState;
 
 
-            int count = stateObject.Handler.EndReceive(asyncResult);
+            int count = 0;
+            try
+            {
+                count = stateObject.Handler.EndReceive(asyncResult);
+            }
+            catch (ObjectDisposedException)
+            {
+                //Server is shutting down, do nothing.
+            }
 
             if (count > 0)
             {
@@ -247,49 +270,56 @@ namespace Camera_Bot___Server
             {
                 Command_Object command_Object = command_queue.Take();
 
+                if (command_Object == null)
+                {
+                    continue;
+                }
+
                 try
                 {
-                    switch ((Command)Enum.Parse(typeof(Command), command_Object.Command))
+                    Command command = (Command)Enum.Parse(typeof(Command), command_Object.Command);
+
+                    switch (command)
                     {
-                        #region Movement Start
+                        #region Old
+                        //#region Movement Start
 
-                        case Command.Up:
-                            try
-                            {
-                                SendResponse(command_Object.StateObject.Handler, Response.Ok);
-
-
-                                //
-                            }
-                            catch (SocketException)
-                            {
-                                Disconnect(command_Object.StateObject);
-                            }
-                            break;
-
-                        #endregion Movement Start
+                        //case Command.Up:
+                        //    try
+                        //    {
+                        //        SendResponse(command_Object.StateObject.Handler, Response.Ok);
 
 
-                        #region Movement End
+                                
+                        //    }
+                        //    catch (SocketException)
+                        //    {
+                        //        Disconnect(command_Object.StateObject);
+                        //    }
+                        //    break;
 
-                        case Command.StopUp:
-                            try
-                            {
-                                SendResponse(command_Object.StateObject.Handler, Response.Ok);
-
-
-                                //
-                            }
-                            catch (SocketException)
-                            {
-                                Disconnect(command_Object.StateObject);
-                            }
-                            break;
-
-                        #endregion Movement End
+                        //#endregion Movement Start
 
 
-                        #region Other
+                        //#region Movement End
+
+                        //case Command.StopUp:
+                        //    try
+                        //    {
+                        //        SendResponse(command_Object.StateObject.Handler, Response.Ok);
+
+
+                        //        //
+                        //    }
+                        //    catch (SocketException)
+                        //    {
+                        //        Disconnect(command_Object.StateObject);
+                        //    }
+                        //    break;
+
+                        //#endregion Movement End
+                        #endregion Old
+
 
                         case Command.Disconnect:
                             try
@@ -308,15 +338,15 @@ namespace Camera_Bot___Server
                         default:
                             try
                             {
-                                SendResponse(command_Object.StateObject.Handler, Response.Bad); //Currently unsupported (yet totally legal) command.
+                                SendResponse(command_Object.StateObject.Handler, Response.Ok);
+
+                                Response response = serial_communicator.SendCommand(command);
                             }
                             catch (SocketException)
                             {
                                 Disconnect(command_Object.StateObject);
                             }
                             break;
-
-                        #endregion Other
                     }
                 }
                 catch (ArgumentException)
@@ -341,6 +371,8 @@ namespace Camera_Bot___Server
         }
 
 
+        #region Helpers
+
         /// <summary>
         /// Sends a response to the given client.
         /// </summary>
@@ -363,7 +395,58 @@ namespace Camera_Bot___Server
 
             stateObject.KeepAlive = false;
 
+            all_stateObjects.Remove(stateObject);
+        }
 
+        #endregion Helpers
+
+
+        /// <summary>
+        /// Gracefully stops the server.
+        /// </summary>
+        public void StopServer()
+        {
+            LinkedListNode<StateObject> node = all_stateObjects.First;
+
+            while (node != null)
+            {
+                LinkedListNode<StateObject> temp = node.Next;
+
+                Disconnect(node.Value);
+
+                node.Value.ReceiveResetEvent.Set();
+
+                node = temp;
+            }
+
+
+            continue_running = false;
+
+            acceptance_waiter.Set();
+            command_queue.Add(null);
+        }
+
+
+        /// <summary>
+        /// Disposes of the data in the server. Stops the server if it is running, and it can never be started again.
+        /// </summary>
+        public void Close()
+        {
+            if (continue_running)
+            {
+                StopServer();
+            }
+
+
+            try
+            {
+                listener.Shutdown(SocketShutdown.Both);
+                listener.Close();
+            }
+            catch (SocketException)
+            {
+                //Someone was trying to do something, too bad.
+            }
         }
     }
 
