@@ -16,26 +16,31 @@ namespace Camera_Bot___Server
 
         static void Main(string[] args)
         {
-            ConfigFile configFile = new ConfigFile(CONFIG_FILE);
+            //ConfigFile configFile = new ConfigFile(CONFIG_FILE);
 
-            configFile.ConfigOptions.Add("IPv4", "");
-            configFile.ConfigOptions.Add("Port", "11000");
-            configFile.ConfigOptions.Add("SerialPortName", "");
-
-
-            if (!File.Exists(CONFIG_FILE))
-            {
-                configFile.WriteFile();
-
-                return;
-            }
+            //configFile.ConfigOptions.Add("IPv4", "");
+            //configFile.ConfigOptions.Add("Port", "11000");
+            //configFile.ConfigOptions.Add("SerialPortName", "");
 
 
-            configFile.ReadFile();
+            //if (!File.Exists(CONFIG_FILE))
+            //{
+            //    configFile.WriteFile();
+
+            //    return;
+            //}
+
+
+            //configFile.ReadFile();
 
             //Check for correct config options.
             //Actually start server with them.
             //Optionally make a loop to type commands in the terminal.
+
+
+            AsyncServer server = new AsyncServer(new IPAddress(new byte[] { 25, 92, 246, 145 }), 11000);
+
+            server.StartServer(5);
         }
     }
 }
