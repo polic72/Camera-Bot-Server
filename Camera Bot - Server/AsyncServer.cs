@@ -113,7 +113,7 @@ namespace Camera_Bot___Server
 
             //TODO remember to add a config setting for the Serial Port Name.
 
-            serial_communicator = new SerialCommunicator("COM3");
+            serial_communicator = new SerialCommunicator("COM7");
         }
 
 

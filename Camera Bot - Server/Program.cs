@@ -38,7 +38,7 @@ namespace Camera_Bot___Server
             //Optionally make a loop to type commands in the terminal.
 
 
-            AsyncServer server = new AsyncServer(new IPAddress(new byte[] { 25, 92, 246, 145 }), 11000);
+            AsyncServer server = new AsyncServer(new IPAddress(new byte[] { 192, 168, 50, 108 }), 11000);    //25, 92, 246, 145
 
             server.StartServer(5);
         }
