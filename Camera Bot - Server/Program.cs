@@ -14,26 +14,37 @@ namespace Camera_Bot___Server
     {
         public const string CONFIG_FILE = "server.config";
 
+
+        public const string IPV4 = "IPv4";
+        public const string PORT = "Port";
+        public const string SERIAL_PORT_NAME = "SerialPortName";
+
         static void Main(string[] args)
         {
-            //ConfigFile configFile = new ConfigFile(CONFIG_FILE);
+            ConfigFile configFile = new ConfigFile(CONFIG_FILE);
 
-            //configFile.ConfigOptions.Add("IPv4", "");
-            //configFile.ConfigOptions.Add("Port", "11000");
-            //configFile.ConfigOptions.Add("SerialPortName", "");
+            configFile.ConfigOptions.Add(IPV4, "");
+            configFile.ConfigOptions.Add(PORT, "11000");
+            configFile.ConfigOptions.Add("SerialPortName", "");
 
 
-            //if (!File.Exists(CONFIG_FILE))
+            if (!File.Exists(CONFIG_FILE))
+            {
+                configFile.WriteFile();
+
+                return;
+            }
+
+
+            configFile.ReadFile();
+
+            //Check for correct config options:
+            //if (configFile.ConfigOptions[IPV4])
             //{
-            //    configFile.WriteFile();
 
-            //    return;
             //}
 
 
-            //configFile.ReadFile();
-
-            //Check for correct config options.
             //Actually start server with them.
             //Optionally make a loop to type commands in the terminal.
 
